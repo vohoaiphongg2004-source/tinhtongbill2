@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tính Tổng Bill</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:16px;font-family:Arial,sans-serif;background:#f4f6f9;color:#202938}
+.container{max-width:1200px;margin:auto}
+h1{font-size:25px;margin:0 0 16px}
+h2{font-size:18px;margin:0 0 12px}
+.card{background:#fff;border:1px solid #e0e5ec;border-radius:12px;padding:16px;margin-bottom:16px}
+button,input,select{font:inherit}
+button{border:1px solid #ccd3dd;border-radius:8px;padding:10px 14px;background:#fff;cursor:pointer}
+button.primary{background:#1769e0;color:#fff;border-color:#1769e0}
+button.danger{color:#b42318;border-color:#e5b7b3}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #1769e0;outline-offset:2px}
+.actions,.date-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+input[type=date],select,input[type=number],input[type=text]{padding:9px;border:1px solid #ccd3dd;border-radius:8px;background:#fff}
+.total{background:#eaf2ff;border-radius:10px;padding:14px}
+.total strong{display:block;font-size:30px;margin-top:6px;color:#1457b8}
+.muted{color:#687386;font-size:13px}
+.shop-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.shop-list label{display:flex;align-items:center;gap:8px;min-width:0}
+.shop-list input{width:18px;height:18px}
+.table-wrap{overflow-x:auto;width:100%}
+table{border-collapse:collapse;white-space:nowrap;width:max-content;min-width:100%}
+th,td{border:1px solid #e0e5ec;padding:7px;text-align:center}
+th{background:#eef2f7;font-size:13px}
+td:first-child,th:first-child{text-align:left;font-weight:bold;background:#f7f9fc}
+td input[type=number]{width:88px;padding:8px 5px;text-align:center}
+tfoot td{font-weight:bold;background:#eef2f7}
+.status{font-size:13px;color:#247447;margin-top:8px}
+.toggle{display:flex;align-items:center;gap:9px;margin:12px 0;font-weight:bold}
+.toggle input{width:18px;height:18px}
+.hidden{display:none!important}
+.stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{background:#f7f9fc;border:1px solid #e0e5ec;border-radius:10px;padding:12px}
+.stat strong{display:block;font-size:22px;margin-top:5px}
+.inline-field{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.inline-field select{min-width:150px}
+@media(max-width:650px){body{padding:10px}.card{padding:12px}h1{font-size:22px}.shop-list{grid-template-columns:repeat(2,minmax(0,1fr))}.stat-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>📦 Tính Tổng Bill</h1>
+
+<div class="card">
+  <h2>Ngày làm việc</h2>
+  <div class="date-row">
+    <button id="prevDay" aria-label="Ngày trước">‹</button>
+    <input type="date" id="date">
+    <button id="nextDay" aria-label="Ngày sau">›</button>
+    <button id="today">Hôm nay</button>
+  </div>
+  <p class="muted" id="currentDateTime">Ngày giờ hiện tại: --</p>
+  <p class="muted">Dữ liệu được lưu riêng theo từng ngày trên trình duyệt này.</p>
+</div>
+
+<div class="card">
+  <h2>Tổng bill trong ngày</h2>
+  <div class="stat-grid">
+    <div class="stat">Tổng bill gốc<strong id="grossTotal">0</strong></div>
+    <div class="stat">Bill ngoại lệ<strong id="exceptionTotal">0</strong></div>
+    <div class="total">Tổng bill thực tính<strong id="netTotal">0</strong><span class="muted" id="subtractState">Chưa áp dụng trừ ngoại lệ</span></div>
+  </div>
+  <label class="toggle">
+    <input type="checkbox" id="applyExceptions">
+    Trừ bill ngoại lệ khỏi tổng
+  </label>
+  <p class="muted">Bỏ tích: tổng giữ nguyên bill gốc. Tích chọn: bill ngoại lệ được trừ theo từng shop và khung giờ, số bill không xuống dưới 0.</p>
+</div>
+
+<div class="card">
+  <h2>Chọn shop tính tổng</h2>
+  <div class="actions" style="margin-bottom:12px">
+    <button id="selectAll">Chọn tất cả</button>
+    <button id="selectNone">Bỏ chọn</button>
+  </div>
+  <div class="shop-list" id="shopList"></div>
+  <div style="margin-top:16px">
+    <strong>Chọn khung giờ tính tổng</strong>
+    <div class="actions" style="margin:8px 0">
+      <button id="selectAllHours">Chọn tất cả giờ</button>
+      <button id="selectNoHours">Bỏ chọn giờ</button>
+    </div>
+    <div class="shop-list" id="hourList"></div>
+  </div>
+  <div class="total" style="margin-top:12px">
+    Tổng shop/giờ đã chọn<strong id="selectedTotal">0</strong>
+    <div class="muted" id="selectedNames"></div>
+    <div class="muted" style="margin-top:8px">Bill gốc: <b id="selectedGross">0</b> | Ngoại lệ: <b id="selectedException">0</b></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Bảng bill chính</h2>
+  <p class="muted">Nhập tổng bill của từng shop ở từng khung giờ. Tổng hàng/cột sẽ tự cập nhật theo tùy chọn trừ ngoại lệ.</p>
+  <div class="table-wrap">
+    <table>
+      <thead id="mainHead"></thead><tbody id="mainBody"></tbody><tfoot id="mainFoot"></tfoot>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="actions" style="justify-content:space-between">
+    <h2 style="margin:0">Bill ngoại lệ</h2>
+    <button id="toggleExceptions">Ẩn bảng ngoại lệ</button>
+  </div>
+  <p class="muted">Nhập số bill cần loại trừ cho từng shop/khung giờ. Có thể nhập ngoại lệ nhiều lần; các dòng cùng shop và giờ sẽ được cộng lại.</p>
+  <div id="exceptionPanel">
+    <div class="actions" style="margin-bottom:12px">
+      <button class="primary" id="addException">+ Thêm bill ngoại lệ</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Shop</th><th>Khung giờ</th><th>Số bill ngoại lệ</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
+        <tbody id="exceptionBody"></tbody>
+        <tfoot><tr><td colspan="2">Tổng bill ngoại lệ</td><td id="exceptionFoot">0</td><td colspan="2"></td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Lưu và khôi phục dữ liệu</h2>
+  <div class="actions">
+    <button class="primary" id="exportBtn">Tải file dữ liệu (JSON)</button>
+    <button id="importBtn">Nhập file dữ liệu (JSON)</button>
+    <button class="danger" id="clearBtn">Xóa ngày này</button>
+    <button class="primary" id="exportCsvBtn">Xuất Excel (CSV)</button>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  <p class="muted">CSV có mã UTF-8 BOM để Excel nhận diện tiếng Việt tốt hơn. Nếu cần file Excel định dạng .xlsx thật, có thể bổ sung thư viện xuất Excel.</p>
+  <div class="status" id="status" aria-live="polite">Dữ liệu đã được lưu trên trình duyệt.</div>
+</div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const SHOPS=["Spc","Spp","Ttc","Ttp","Kho sỉ HCM","Anh Bảo","Thủy tt","Thủy sp","ĐTPC"];
+const HOURS=["7h","12h","14h","16h","18h"];
+const STORAGE_KEY="tinhTongBill_v3_exceptions";
+const $=id=>document.getElementById(id);
+let data={}, selectedShops=new Set(SHOPS), selectedHours=new Set(HOURS);
+let currentDate=localDateString(new Date()), exceptionPanelVisible=true;
+
+function localDateString(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+function shiftDate(dateString,amount){
+  const [y,m,d]=dateString.split("-").map(Number);
+  const dt=new Date(y,m-1,d);dt.setDate(dt.getDate()+amount);return localDateString(dt);
+}
+function getDay(){
+  if(!data[currentDate]) data[currentDate]={cells:{},exceptions:[],applyExceptions:false};
+  const day=data[currentDate];
+  if(!day.cells) day.cells={};
+  if(!Array.isArray(day.exceptions)) day.exceptions=[];
+  if(typeof day.applyExceptions!=="boolean") day.applyExceptions=false;
+  return day;
+}
+function getGross(shop,hour){
+  const n=Number(getDay().cells?.[shop]?.[hour]??0);
+  return Number.isSafeInteger(n)&&n>=0?n:0;
+}
+function getException(shop,hour){
+  return getDay().exceptions.reduce((sum,e)=>sum+(e.shop===shop&&e.hour===hour?validNum(e.amount):0),0);
+}
+function validNum(value){
+  const n=Number(value);return Number.isSafeInteger(n)&&n>=0?n:0;
+}
+function getNet(shop,hour){
+  const gross=getGross(shop,hour);
+  return getDay().applyExceptions?Math.max(0,gross-getException(shop,hour)):gross;
+}
+function displayedCellValue(shop,hour){
+  const value=getNet(shop,hour);
+  // Ô trống khi giá trị bằng 0; không tự điền số 0 vào bảng nhập.
+  return value===0?"":String(value);
+}
+function sumShop(shop,fn){return HOURS.reduce((s,h)=>s+fn(shop,h),0)}
+function sumHour(hour,fn){return SHOPS.reduce((s,shop)=>s+fn(shop,hour),0)}
+function sumAll(fn){return SHOPS.reduce((s,shop)=>s+sumShop(shop,fn),0)}
+function totalExceptions(){return getDay().exceptions.reduce((s,e)=>s+validNum(e.amount),0)}
+function saveData(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+    $("status").textContent="Đã tự lưu dữ liệu trên trình duyệt.";
+    $("status").style.color="#247447";
+  }catch(e){
+    $("status").textContent="Không lưu được. Anh hãy tải file dữ liệu về máy.";
+    $("status").style.color="#b42318";
+  }
+}
+function validateData(input){
+  if(!input||typeof input!=="object"||Array.isArray(input))throw new Error("File dữ liệu không hợp lệ.");
+  const out={};
+  for(const [date,day] of Object.entries(input)){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!day||typeof day!=="object"||Array.isArray(day))continue;
+    const clean={cells:{},exceptions:[],applyExceptions:day.applyExceptions===true};
+    // Hỗ trợ cả dữ liệu phiên bản cũ (shop trực tiếp ở cấp ngày)
+    const cells=day.cells&&typeof day.cells==="object"?day.cells:day;
+    for(const shop of SHOPS){
+      if(!cells[shop]||typeof cells[shop]!=="object")continue;
+      clean.cells[shop]={};
+      for(const hour of HOURS){
+        const value=cells[shop][hour];
+        if(typeof value==="number"&&Number.isSafeInteger(value)&&value>=0)clean.cells[shop][hour]=value;
+        else if(value&&typeof value==="object"&&Number.isSafeInteger(value.done)&&value.done>=0)clean.cells[shop][hour]=value.done;
+      }
+    }
+    if(Array.isArray(day.exceptions)){
+      clean.exceptions=day.exceptions.filter(e=>e&&SHOPS.includes(e.shop)&&HOURS.includes(e.hour))
+        .map(e=>({id:String(e.id||makeId()),shop:e.shop,hour:e.hour,amount:validNum(e.amount),note:String(e.note||"")}));
+    }
+    out[date]=clean;
+  }
+  return out;
+}
+function loadData(){
+  try{const raw=localStorage.getItem(STORAGE_KEY);return raw?validateData(JSON.parse(raw)):{}}
+  catch(e){$("status").textContent="Không đọc được dữ liệu lưu. Anh thử nhập file dự phòng.";return {}}
+}
+function makeId(){return "e"+Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
+function createSelect(options,selected){
+  const sel=document.createElement("select");
+  for(const item of options){const opt=document.createElement("option");opt.value=item;opt.textContent=item;sel.append(opt)}
+  sel.value=selected;return sel;
+}
+function renderChoices(){
+  const shopList=$("shopList");shopList.replaceChildren();
+  for(const shop of SHOPS){
+    const label=document.createElement("label"),cb=document.createElement("input"),span=document.createElement("span");
+    cb.type="checkbox";cb.checked=selectedShops.has(shop);
+    cb.addEventListener("change",()=>{cb.checked?selectedShops.add(shop):selectedShops.delete(shop);renderTotals()});
+    span.textContent=shop;label.append(cb,span);shopList.append(label);
+  }
+  const hourList=$("hourList");hourList.replaceChildren();
+  for(const hour of HOURS){
+    const label=document.createElement("label"),cb=document.createElement("input"),span=document.createElement("span");
+    cb.type="checkbox";cb.checked=selectedHours.has(hour);
+    cb.addEventListener("change",()=>{cb.checked?selectedHours.add(hour):selectedHours.delete(hour);renderTotals()});
+    span.textContent=hour;label.append(cb,span);hourList.append(label);
+  }
+}
+function setCell(shop,hour,value){
+  const day=getDay();if(!day.cells[shop])day.cells[shop]={};
+  day.cells[shop][hour]=value;
+}
+function renderMainTable(){
+  const head=$("mainHead"),body=$("mainBody"),foot=$("mainFoot");
+  head.replaceChildren();body.replaceChildren();foot.replaceChildren();
+  const hr=document.createElement("tr");addCell(hr,"Shop","th");
+  for(const hour of HOURS)addCell(hr,hour,"th");
+  addCell(hr,"Tổng shop","th");head.append(hr);
+  for(const shop of SHOPS){
+    const row=document.createElement("tr");addCell(row,shop,"td");
+    for(const hour of HOURS){
+      const td=document.createElement("td"),input=document.createElement("input");
+      input.type="number";input.min="0";input.step="1";input.inputMode="numeric";input.value=displayedCellValue(shop,hour);input.placeholder="";input.setAttribute("aria-label",`${shop}, ${hour}`);
+      input.addEventListener("change",()=>{
+        const raw=input.value.trim(),n=raw===""?0:Number(raw);
+        if(!Number.isSafeInteger(n)||n<0){alert("Vui lòng nhập số nguyên từ 0 trở lên.");input.value=displayedCellValue(shop,hour);return}
+        // Khi đang trừ ngoại lệ, số nhập là số đang thấy (sau trừ);
+        // quy đổi về số gốc để bỏ tích có thể khôi phục chính xác.
+        const grossValue=(getDay().applyExceptions && raw!=="") ? n+getException(shop,hour) : n;
+        setCell(shop,hour,grossValue);saveData();refreshTotalsAndNumbers();
+      });
+      td.append(input);row.append(td);
+    }
+    addCell(row,sumShop(shop,getNet),"td");body.append(row);
+  }
+  const tr=document.createElement("tr");addCell(tr,"Tổng theo giờ","td");
+  for(const hour of HOURS)addCell(tr,sumHour(hour,getNet).toLocaleString("vi-VN"),"td");
+  addCell(tr,sumAll(getNet).toLocaleString("vi-VN"),"td");foot.append(tr);
+}
+function addCell(row,value,tag){
+  const cell=document.createElement(tag);cell.textContent=value;row.append(cell);return cell;
+}
+function renderExceptions(){
+  const body=$("exceptionBody");body.replaceChildren();
+  const exceptions=getDay().exceptions;
+  if(!exceptions.length){
+    const tr=document.createElement("tr"),td=addCell(tr,"Chưa có bill ngoại lệ","td");td.colSpan=5;td.style.textAlign="center";body.append(tr);
+  }else{
+    for(const e of exceptions){
+      const tr=document.createElement("tr");
+      const shopSel=createSelect(SHOPS,e.shop),hourSel=createSelect(HOURS,e.hour);
+      shopSel.addEventListener("change",()=>{e.shop=shopSel.value;saveData();refreshTotalsAndNumbers()});
+      hourSel.addEventListener("change",()=>{e.hour=hourSel.value;saveData();refreshTotalsAndNumbers()});
+      const shopTd=document.createElement("td");shopTd.append(shopSel);tr.append(shopTd);
+      const hourTd=document.createElement("td");hourTd.append(hourSel);tr.append(hourTd);
+      const amountTd=document.createElement("td"),amount=document.createElement("input");
+      amount.type="number";amount.min="0";amount.step="1";amount.value=String(e.amount);amount.style.width="100px";
+      amount.addEventListener("change",()=>{const n=amount.value.trim()===""?0:Number(amount.value);if(!Number.isSafeInteger(n)||n<0){alert("Số bill ngoại lệ phải là số nguyên từ 0 trở lên.");amount.value=String(e.amount);return}e.amount=n;saveData();refreshTotalsAndNumbers()});
+      amountTd.append(amount);tr.append(amountTd);
+      const noteTd=document.createElement("td"),note=document.createElement("input");note.type="text";note.placeholder="Lý do (không bắt buộc)";note.value=e.note||"";note.style.width="170px";
+      note.addEventListener("change",()=>{e.note=note.value;saveData()});noteTd.append(note);tr.append(noteTd);
+      const actionTd=document.createElement("td"),del=document.createElement("button");del.className="danger";del.textContent="Xóa";
+      del.addEventListener("click",()=>{getDay().exceptions=getDay().exceptions.filter(x=>x.id!==e.id);saveData();renderExceptions();refreshTotalsAndNumbers()});
+      actionTd.append(del);tr.append(actionTd);body.append(tr);
+    }
+  }
+  $("exceptionFoot").textContent=totalExceptions().toLocaleString("vi-VN");
+}
+function renderTotals(){
+  const gross=sumAll(getGross),exceptions=totalExceptions(),net=sumAll(getNet);
+  $("grossTotal").textContent=gross.toLocaleString("vi-VN");
+  $("exceptionTotal").textContent=exceptions.toLocaleString("vi-VN");
+  $("netTotal").textContent=net.toLocaleString("vi-VN");
+  $("applyExceptions").checked=getDay().applyExceptions;
+  $("subtractState").textContent=getDay().applyExceptions?"Đang trừ bill ngoại lệ":"Chưa áp dụng trừ ngoại lệ";
+  let selectedGross=0,selectedExceptions=0,selectedNet=0;
+  for(const shop of selectedShops)for(const hour of selectedHours){
+    selectedGross+=getGross(shop,hour);selectedExceptions+=getException(shop,hour);selectedNet+=getNet(shop,hour);
+  }
+  $("selectedTotal").textContent=selectedNet.toLocaleString("vi-VN");
+  $("selectedGross").textContent=selectedGross.toLocaleString("vi-VN");
+  $("selectedException").textContent=selectedExceptions.toLocaleString("vi-VN");
+  const shops=SHOPS.filter(s=>selectedShops.has(s)),hours=HOURS.filter(h=>selectedHours.has(h));
+  $("selectedNames").textContent=(shops.length?shops.join(" + "):"Chưa chọn shop nào")+" | "+(hours.length?hours.join(" + "):"Chưa chọn giờ nào");
+}
+function refreshTotalsAndNumbers(){
+  renderTotals();renderExceptions();
+  // Đồng bộ các ô nhập theo chế độ hiện tại, nhưng không hiển thị số 0 mặc định.
+  [...$("mainBody").rows].forEach((row,i)=>{
+    const shop=SHOPS[i];
+    HOURS.forEach((hour,j)=>{row.cells[j+1].querySelector("input").value=displayedCellValue(shop,hour)});
+    row.lastElementChild.textContent=sumShop(shop,getNet).toLocaleString("vi-VN");
+  });
+  const foot=$("mainFoot").rows[0];
+  HOURS.forEach((hour,i)=>foot.cells[i+1].textContent=sumHour(hour,getNet).toLocaleString("vi-VN"));
+  foot.lastElementChild.textContent=sumAll(getNet).toLocaleString("vi-VN");
+}
+function renderAll(){
+  $("date").value=currentDate;renderChoices();renderMainTable();renderExceptions();renderTotals();
+  $("exceptionPanel").classList.toggle("hidden",!exceptionPanelVisible);
+  $("toggleExceptions").textContent=exceptionPanelVisible?"Ẩn bảng ngoại lệ":"Hiện bảng ngoại lệ";
+}
+function updateCurrentDateTime(){
+  const now=new Date();$("currentDateTime").textContent="Ngày giờ hiện tại: "+now.toLocaleDateString("vi-VN")+" "+now.toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+$("prevDay").addEventListener("click",()=>{currentDate=shiftDate(currentDate,-1);renderAll()});
+$("nextDay").addEventListener("click",()=>{currentDate=shiftDate(currentDate,1);renderAll()});
+$("today").addEventListener("click",()=>{currentDate=localDateString(new Date());renderAll()});
+$("date").addEventListener("change",()=>{if($("date").value){currentDate=$("date").value;renderAll()}});
+$("selectAll").addEventListener("click",()=>{selectedShops=new Set(SHOPS);renderChoices();renderTotals()});
+$("selectNone").addEventListener("click",()=>{selectedShops.clear();renderChoices();renderTotals()});
+$("selectAllHours").addEventListener("click",()=>{selectedHours=new Set(HOURS);renderChoices();renderTotals()});
+$("selectNoHours").addEventListener("click",()=>{selectedHours.clear();renderChoices();renderTotals()});
+$("applyExceptions").addEventListener("change",()=>{
+  getDay().applyExceptions=$("applyExceptions").checked;
+  saveData();
+  renderMainTable();
+  renderTotals();
+  renderExceptions();
+});
+$("toggleExceptions").addEventListener("click",()=>{exceptionPanelVisible=!exceptionPanelVisible;$("exceptionPanel").classList.toggle("hidden",!exceptionPanelVisible);$("toggleExceptions").textContent=exceptionPanelVisible?"Ẩn bảng ngoại lệ":"Hiện bảng ngoại lệ"});
+$("addException").addEventListener("click",()=>{getDay().exceptions.push({id:makeId(),shop:SHOPS[0],hour:HOURS[0],amount:0,note:""});saveData();renderExceptions();refreshTotalsAndNumbers()});
+$("exportBtn").addEventListener("click",()=>{
+  saveData();downloadBlob(JSON.stringify(data,null,2),"application/json;charset=utf-8",`DuLieuBill_${currentDate}.json`);
+});
+$("importBtn").addEventListener("click",()=>$("fileInput").click());
+$("fileInput").addEventListener("change",async event=>{
+  const file=event.target.files[0];if(!file)return;
+  try{
+    const imported=validateData(JSON.parse(await file.text()));
+    if(!confirm("Nhập file sẽ gộp dữ liệu vào dữ liệu hiện tại. Nếu trùng ngày, dữ liệu trong file sẽ thay thế. Tiếp tục?"))return;
+    data={...data,...imported};saveData();renderAll();$("status").textContent="Đã nhập dữ liệu thành công.";
+  }catch(e){alert("File không hợp lệ hoặc không đọc được.")}
+  finally{event.target.value=""}
+});
+$("clearBtn").addEventListener("click",()=>{
+  if(!confirm(`Xóa toàn bộ bill ngày ${currentDate}? Thao tác này không thể hoàn tác.`))return;
+  delete data[currentDate];saveData();renderAll();
+});
+function csvEscape(value){
+  let s=String(value??"");
+  if(/^[=+\-@]/.test(s))s="'"+s;
+  return '"'+s.replace(/"/g,'""')+'"';
+}
+function downloadBlob(content,type,filename){
+  const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$("exportCsvBtn").addEventListener("click",()=>{
+  const lines=[];
+  lines.push(["Ngày",currentDate].map(csvEscape).join(";"));
+  lines.push([]);
+  lines.push(["Shop",...HOURS,"Tổng bill gốc","Bill ngoại lệ","Tổng sau điều chỉnh"].map(csvEscape).join(";"));
+  for(const shop of SHOPS){
+    const row=[shop,...HOURS.map(h=>getGross(shop,h)),sumShop(shop,getGross),sumShop(shop,getException),sumShop(shop,getNet)];
+    lines.push(row.map(csvEscape).join(";"));
+  }
+  lines.push(["Tổng tất cả shop",...HOURS.map(h=>sumHour(h,getNet)),sumAll(getGross),totalExceptions(),sumAll(getNet)].map(csvEscape).join(";"));
+  lines.push([]);
+  lines.push(["Bill ngoại lệ","","","",""].map(csvEscape).join(";"));
+  lines.push(["Shop","Khung giờ","Số bill","Ghi chú"].map(csvEscape).join(";"));
+  for(const e of getDay().exceptions)lines.push([e.shop,e.hour,e.amount,e.note].map(csvEscape).join(";"));
+  lines.push([]);
+  lines.push(["Đang áp dụng trừ ngoại lệ",getDay().applyExceptions?"Có":"Không"].map(csvEscape).join(";"));
+  const csv="\uFEFF"+lines.join("\r\n");
+  downloadBlob(csv,"text/csv;charset=utf-8;",`Bill_${currentDate}.csv`);
+});
+data=loadData();renderAll();updateCurrentDateTime();setInterval(updateCurrentDateTime,1000);
+})();
+</script>
+</body>
+</html>
